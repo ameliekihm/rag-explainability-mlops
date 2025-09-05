@@ -1,0 +1,9 @@
+# Ignore raw datasets
+data/raw/
+
+# HuggingFace cache
+~/.cache/
+/home/*/.cache/
+/Users/*/.cache/
+
+**/.ipynb_checkpoints/
