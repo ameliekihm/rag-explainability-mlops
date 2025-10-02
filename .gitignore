@@ -7,3 +7,5 @@ data/raw/
 /Users/*/.cache/
 
 **/.ipynb_checkpoints/
+
+data/processed/*.npy
