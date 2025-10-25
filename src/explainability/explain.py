@@ -59,7 +59,6 @@ class Explainability:
             linecolor="white"
         )
 
-        ax.set_title("Top-10 Attention Map", fontsize=8, pad=6)
         ax.set_xlabel("Input Tokens", fontsize=7, labelpad=5)
         ax.set_ylabel("Output Tokens", fontsize=7, labelpad=5)
         ax.tick_params(axis="x", rotation=45, labelsize=6)
