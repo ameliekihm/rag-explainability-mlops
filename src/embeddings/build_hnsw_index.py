@@ -15,6 +15,6 @@ def build_hnsw_index(emb_path, save_path, m=32, ef=128):
     print(f"✅ HNSW index saved at {save_path}")
 
 if __name__ == "__main__":
-    emb_path = "data/processed/context_embeddings_sample.npy"
+    emb_path = "data/processed/context_embeddings_mini.npy"
     save_path = "data/processed/hnsw_index.faiss"
     build_hnsw_index(emb_path, save_path)
