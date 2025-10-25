@@ -4,7 +4,7 @@ from sentence_transformers import SentenceTransformer
 import os
 
 class Retriever:
-    def __init__(self, model_name="intfloat/e5-large", index_path=None, k=20):
+    def __init__(self, model_name="intfloat/e5-large", index_path=None, k=5):
         self.model = SentenceTransformer(model_name)
         self.k = k
         self.index = None
@@ -21,7 +21,7 @@ class Retriever:
     def embed_query(self, query):
         if isinstance(query, str):
             query = [query]
-        embeddings = self.model.encode(query, convert_to_numpy=True, show_progress_bar=False)
+        embeddings = self.model.encode(["query: " + q for q in query], convert_to_numpy=True, show_progress_bar=False)
         # L2 normalize for stable inner product or cosine distance
         norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
         embeddings = embeddings / np.clip(norms, 1e-10, None)
