@@ -1,6 +1,3 @@
-# Ignore raw datasets
-data/raw/
-
 # HuggingFace cache
 ~/.cache/
 /home/*/.cache/
@@ -12,3 +9,6 @@ data/
 src/generation/__pycache__/
 src/generation/__pycache__/
 src/retrieval/__pycache__/
+src/embeddings/__pycache__/
+.DS_Store
+src/embeddings/vectorize_sample.py
