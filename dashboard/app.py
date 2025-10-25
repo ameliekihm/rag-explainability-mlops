@@ -1,11 +1,18 @@
-import sys
-import os
+import sys, os, warnings, asyncio, torch
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from src.retrieval.retriever import Retriever
 from src.generation.generator import Generator
 from src.explainability.explain import Explainability
 import streamlit as st
 import json
+
+
+if sys.platform == "darwin":
+    import multiprocessing
+    multiprocessing.set_start_method("fork", force=True)
+
+warnings.filterwarnings("ignore", category=UserWarning, module="torch")
+
 
 st.set_page_config(page_title="RAG Explainability Dashboard", layout="wide")
 

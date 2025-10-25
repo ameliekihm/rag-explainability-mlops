@@ -3,12 +3,18 @@
 /home/*/.cache/
 /Users/*/.cache/
 
+# Jupyter notebook checkpoints
 **/.ipynb_checkpoints/
 
+# Local data
 data/
-src/generation/__pycache__/
-src/generation/__pycache__/
-src/retrieval/__pycache__/
-src/embeddings/__pycache__/
+
+# Python cache
+**/__pycache__/
+**/*.pyc
+
+# macOS metadata
 .DS_Store
+
+# Local test or temporary scripts
 src/embeddings/vectorize_sample.py
