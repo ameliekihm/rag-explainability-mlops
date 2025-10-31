@@ -18,3 +18,5 @@ data/
 
 # Local test or temporary scripts
 src/embeddings/vectorize_sample.py
+
+lambda/model/
