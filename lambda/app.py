@@ -1,6 +1,9 @@
 import sys
 import os
 import json
+import torch
+
+from transformers import T5ForConditionalGeneration, T5Tokenizer
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -15,8 +18,18 @@ retriever = Retriever(
 with open("data/processed/contexts.json") as f:
     contexts = json.load(f)
 
-def dummy_generate_answer(query, context):
-    return f"Based on the context, this question is likely related to: {query}"
+model_path = "lambda/model/t5-small"
+tokenizer = T5Tokenizer.from_pretrained(model_path)
+model = T5ForConditionalGeneration.from_pretrained(model_path)
+device = torch.device("cpu")
+model = model.to(device)
+
+def generate_answer(query, context):
+    prompt = f"question: {query} context: {context} answer:"
+    inputs = tokenizer(prompt, return_tensors="pt").to(device)
+    output = model.generate(inputs.input_ids, max_length=120)
+    answer = tokenizer.decode(output[0], skip_special_tokens=True)
+    return answer
 
 def handler(event, context):
     query = event.get("query", "")
@@ -31,7 +44,7 @@ def handler(event, context):
     top_index = int(indices[0])
     top_context = contexts[top_index]
 
-    answer = dummy_generate_answer(query, top_context)
+    answer = generate_answer(query, top_context)
 
     response = {
         "query": query,
