@@ -8,6 +8,7 @@ import json
 import pandas as pd
 import time
 import plotly.express as px
+import time
 
 if sys.platform == "darwin":
     import multiprocessing
@@ -42,10 +43,10 @@ bg_image = get_base64_of_bin_file(bg_file)
 
 st.markdown(f"""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Happy+Monkey&family=Lato:ital,wght@0,100;0,300;0,400;0,700;0,900;1,100;1,300;1,400;1,700;1,900&family=Quicksand:wght@300..700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Happy+Monkey&family=Lato:wght@100;300;400;700;900&family=Quicksand:wght@300..700&family=Saira+Stencil+One&display=swap');
 
     .stApp {{
-        background-image: linear-gradient(rgba(255,255,255,0.85), rgba(255,255,255,0.7)),
+        background-image: linear-gradient(rgba(255,255,255,0.85), rgba(255,255,255,0.85)),
                           url("data:image/png;base64,{bg_image}");
         background-size: cover;
         background-position: center;
@@ -59,6 +60,25 @@ st.markdown(f"""
         font-size: 1.05rem !important;
         font-family: 'Lato', 'Quicksand', sans-serif !important;
     }}
+
+    div[data-testid="stTextInput"] > div {{
+        border: 2px solid rgba(0,0,0,0.4) !important;
+        border-radius: 10px !important;
+        background-color: rgba(255,255,255,0.90) !important;
+    }}
+
+    div[data-testid="stTextInput"] > div:focus-within {{
+        border: 2px solid #00006B !important;
+        box-shadow: 0 0 6px rgba(0,0,107,0.35) !important;
+        background-color: rgba(255,255,255,0.98) !important;
+    }}
+
+    div[data-testid="stTextInput"] input {{
+        font-size: 1.05rem !important;
+        font-weight: 500 !important;
+        color: #111 !important;
+    }}
+
 
     .run-separator {{
         width: 100%;
@@ -119,7 +139,7 @@ st.markdown(f"""
         font-weight: 700;
         margin-top: 2rem;
         margin-bottom: 0.3rem;
-        font-family: 'Quicksand', cursive !important;
+        font-family: 'Saira Stencil One', sans-serif !important;
     }}
 
     .subtitle {{
@@ -200,7 +220,7 @@ st.markdown("""
 }
 """, unsafe_allow_html=True)
 
-tabs = st.tabs(["RAG Dashboard", "Evaluation Insights"])
+tabs = st.tabs(["RAG Dashboard", "Question-Type Behavior Analysis"])
 
 with tabs[0]:
 
@@ -217,7 +237,7 @@ with tabs[0]:
             with st.spinner("Running retrieval and generation..."):
                 indices, distances = retriever.search(query)
                 top_contexts = [contexts[i] for i in indices]
-                combined_context = top_contexts[0]
+                combined_context = " ".join(top_contexts[:5])
                 answer, logits, attention = generator.generate_answer(query, combined_context, return_details=True)
                 result = explainer.explain(query, combined_context, answer, logits, attention)
 
@@ -252,29 +272,64 @@ with tabs[0]:
             )
             st.markdown("</div>", unsafe_allow_html=True)
 
-    col1, col2 = st.columns([1, 3])
+    col1, col2 = st.columns([3, 5])
 
     with col1:
-        st.markdown("**Run Full Evaluation on question_set.csv**")
+        st.markdown(
+        "<p style='font-size:18px; margin-top:7px;'><strong>"
+        "Run Full Explainability Evaluation by Question Type"
+        "</p>",
+        unsafe_allow_html=True
+    )
 
     with col2:
-        eval_clicked = st.button("Run Full Evaluation")
+        eval_clicked = st.button("Run Evaluation")
+
+    st.markdown(
+        "<p style='font-size:15px; color:#777; margin-top:-10px;'>"
+        "Uses: <code>question_set.csv</code> (500 queries, 9 types)"
+        "</p>",
+        unsafe_allow_html=True
+    )
 
     if eval_clicked:
-        st.write("Running full evaluation...")
+        start_time = time.time()
+        time_display = st.empty()
+
         df = pd.read_csv("data/question_set.csv")
         logs = []
         progress = st.progress(0)
         total = len(df)
 
+        preview_df = df.head(20)
+        st.markdown("""
+<div style="
+    background: rgba(255,255,255,0.78);
+    border-radius: 12px;
+    box-shadow: 0 6px 14px rgba(0,0,0,0.08);
+    padding: 0.6rem 1.2rem;
+    margin-bottom: 1rem;
+    border-left: 6px solid #7b4bff;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #555;
+">
+    Preview of Evaluation Dataset (first 20 rows)
+</div>
+""", unsafe_allow_html=True)
+
+        st.dataframe(preview_df)
         for idx, row in df.iterrows():
             q = row["question"]
             q_type = row["type"]
+            gold_context = row["context"]
+            if not isinstance(gold_context, str) or not gold_context.strip():
+                gold_context = ""
+
             indices, distances = retriever.search(q)
-            top_contexts = [contexts[i] for i in indices]
-            combined_context = top_contexts[0]
-            answer, logits, attention = generator.generate_answer(q, combined_context, return_details=True)
-            result = explainer.explain(q, combined_context, answer, logits, attention)
+
+            answer, logits, attention = generator.generate_answer(q, gold_context, return_details=True)
+            result = explainer.explain(q, gold_context, answer, logits, attention)
 
             logs.append({
                 "question": q,
@@ -287,6 +342,19 @@ with tabs[0]:
             })
 
             progress.progress((idx + 1) / total)
+            elapsed = time.time() - start_time
+            minutes = int(elapsed // 60)
+            seconds = int(elapsed % 60)
+
+            if minutes > 0:
+                time_display.markdown(
+                    f"⏳ Running full evaluation... **{minutes}m {seconds}s elapsed**"
+                )
+            else:
+                time_display.markdown(
+                    f"⏳ Running full evaluation... **{seconds}s elapsed**"
+                )
+
             time.sleep(0.1)
 
         pd.DataFrame(logs).to_csv("data/experiment_log.csv", index=False)
