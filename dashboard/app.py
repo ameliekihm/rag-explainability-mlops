@@ -253,3 +253,96 @@ with tabs[0]:
         pd.DataFrame(logs).to_csv("data/experiment_log.csv", index=False)
         st.success("Complete. Saved to data/experiment_log.csv")
 
+    # *** Evaluation Insights charts tab ***
+    with tabs[1]:
+
+        log_file = "data/experiment_log.csv"
+
+        if not os.path.exists(log_file):
+            st.warning("Run full evaluation first")
+        else:
+            df = pd.read_csv(log_file)
+
+        # Mean Similarity Distribution by Question Type ------------------------
+            st.markdown("""
+            <div style="
+                background: rgba(255,255,255,0.78);
+                border-radius: 12px;
+                box-shadow: 0 6px 14px rgba(0,0,0,0.08);
+                padding: 0.5rem 1.2rem;
+                margin-top: 1.5rem;
+                margin-bottom: 1.2rem;
+                border-left: 6px solid #7b4bff;
+                font-family: 'Lato', 'Quicksand', sans-serif;
+            ">
+                <h3 style="font-size:1.4rem; font-weight:700; color:#222; margin:0;">
+                    Mean Similarity Distribution by Question Type
+                </h3>
+            </div>
+            """, unsafe_allow_html=True)
+
+            fig1 = px.box(df, x="type", y="mean_similarity", color="type")
+            st.plotly_chart(fig1, use_container_width=True)
+
+            # Retrieval Variance Distribution by Question Type ------------------------
+            st.markdown("""
+            <div style="
+                background: rgba(255,255,255,0.78);
+                border-radius: 12px;
+                box-shadow: 0 6px 14px rgba(0,0,0,0.08);
+                padding: 0.5rem 1.2rem;
+                margin-top: 1.5rem;
+                margin-bottom: 1.2rem;
+                border-left: 6px solid #7b4bff;
+                font-family: 'Lato', 'Quicksand', sans-serif;
+            ">
+                <h3 style="font-size:1.4rem; font-weight:700; color:#222; margin:0;">
+                    Retrieval Variance Distribution by Question Type
+                </h3>
+            </div>
+            """, unsafe_allow_html=True)
+
+            fig2 = px.box(df, x="type", y="variance_similarity", color="type")
+            st.plotly_chart(fig2, use_container_width=True)
+
+            # Generation Length Distribution by Question Type ------------------------
+            st.markdown("""
+            <div style="
+                background: rgba(255,255,255,0.78);
+                border-radius: 12px;
+                box-shadow: 0 6px 14px rgba(0,0,0,0.08);
+                padding: 0.5rem 1.2rem;
+                margin-top: 1.5rem;
+                margin-bottom: 1.2rem;
+                border-left: 6px solid #7b4bff;
+                font-family: 'Lato', 'Quicksand', sans-serif;
+            ">
+                <h3 style="font-size:1.4rem; font-weight:700; color:#222; margin:0;">
+                    Generation Length Distribution by Question Type
+                </h3>
+            </div>
+            """, unsafe_allow_html=True)
+
+            fig3 = px.box(df, x="type", y="generation_length", color="type")
+            st.plotly_chart(fig3, use_container_width=True)
+
+            # Context Attention Distribution by Question Type ------------------------
+            st.markdown("""
+            <div style="
+                background: rgba(255,255,255,0.78);
+                border-radius: 12px;
+                box-shadow: 0 6px 14px rgba(0,0,0,0.08);
+                padding: 0.5rem 1.2rem;
+                margin-top: 1.5rem;
+                margin-bottom: 1.2rem;
+                border-left: 6px solid #7b4bff;
+                font-family: 'Lato', 'Quicksand', sans-serif;
+            ">
+                <h3 style="font-size:1.4rem; font-weight:700; color:#222; margin:0;">
+                    Context Attention Distribution by Question Type
+                </h3>
+            </div>
+            """, unsafe_allow_html=True)
+
+            fig4 = px.box(df, x="type", y="context_attention", color="type")
+            st.plotly_chart(fig4, use_container_width=True)
