@@ -9,7 +9,6 @@ import pandas as pd
 import time
 import plotly.express as px
 
-
 if sys.platform == "darwin":
     import multiprocessing
     multiprocessing.set_start_method("fork", force=True)
@@ -32,7 +31,6 @@ def load_components():
     return retriever, generator, explainer, contexts
 
 retriever, generator, explainer, contexts = load_components()
-
 
 def get_base64_of_bin_file(bin_file):
     with open(bin_file, 'rb') as f:
@@ -148,11 +146,60 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
+st.markdown("""
+<style>
+
+/* Tab container */
+.stTabs [data-testid="stTabs"] {
+    margin-top: 1rem;
+}
+
+/* Each Tab */
+.stTabs [data-testid="stTab"] {
+    font-size: 1.08rem !important;
+    font-weight: 600 !important;
+    padding: 0.7rem 1.4rem !important;
+    border-radius: 10px 10px 0 0 !important;
+    color: #666 !important;
+    background: rgba(255,255,255,0.5);
+    transition: all .2s ease-in-out;
+}
+
+/* Hover */
+.stTabs [data-testid="stTab"]:hover {
+    color: #222 !important;
+    background: rgba(255,255,255,0.8) !important;
+}
+
+/* Remove default Streamlit tab underline */
+.stTabs [data-baseweb="tab-highlight"] {
+    background-color: transparent !important;
+    border-bottom: none !important;
+}
+
+
+/* Selected tab */
+.stTabs [aria-selected="true"] {
+    background: rgba(255,255,255,0.5) !important;
+    color: #00006B !important;
+    border-bottom: 3px solid #00006B !important;
+    font-weight: 00 !important;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
 
 st.markdown("<div class='title'>📑 RAG Explainability Dashboard </div>", unsafe_allow_html=True)
 st.markdown("<div class='subtitle'>Analyze how the model retrieves, generates, and explains answers with interpretability tools.</div>", unsafe_allow_html=True)
+st.markdown("""
+<style>
+[data-testid="stRadio"] {
+    margin-top: -2rem !important; 
+    margin-bottom: -1rem !important; 
+}
+""", unsafe_allow_html=True)
 
-# *** Add tabs to separate main dashboard and charts ***
 tabs = st.tabs(["RAG Dashboard", "Evaluation Insights"])
 
 with tabs[0]:
@@ -192,10 +239,7 @@ with tabs[0]:
             st.markdown("<div class='content-card'><h3>Confidence Score</h3>", unsafe_allow_html=True)
             st.markdown(f"<div class='score-box'>{result['confidence']:.3f}</div>", unsafe_allow_html=True)
             st.markdown(
-                "<p style='font-size:14px; color:#666; font-style:italic;'>"
-                "This score represents the model’s certainty in its generated answer, "
-                "where values closer to 1.0 indicate higher confidence and reliability."
-                "</p>",
+                "<p style='font-size:14px; color:#666; font-style:italic;'>This score represents the model’s certainty.</p>",
                 unsafe_allow_html=True
             )
             st.markdown("</div>", unsafe_allow_html=True)
@@ -203,11 +247,7 @@ with tabs[0]:
             st.markdown("<div class='content-card'><h3>Attention Map</h3>", unsafe_allow_html=True)
             explainer.visualize_attention(attention, explainer.tokenizer.tokenize(query))
             st.markdown(
-                "<p style='font-size:14px; color:#666; font-style:italic; margin-top:0.5rem;'>"
-                "This visualization illustrates how the model attends to different input tokens "
-                "while generating each output token. Darker regions indicate stronger attention "
-                "weights, highlighting the parts of the input most influential in forming the answer."
-                "</p>",
+                "<p style='font-size:14px; color:#666; font-style:italic;'>Token attention visualization.</p>",
                 unsafe_allow_html=True
             )
             st.markdown("</div>", unsafe_allow_html=True)
@@ -219,7 +259,6 @@ with tabs[0]:
 
     with col2:
         eval_clicked = st.button("Run Full Evaluation")
-
 
     if eval_clicked:
         st.write("Running full evaluation...")
@@ -253,96 +292,101 @@ with tabs[0]:
         pd.DataFrame(logs).to_csv("data/experiment_log.csv", index=False)
         st.success("Complete. Saved to data/experiment_log.csv")
 
-    # *** Evaluation Insights charts tab ***
-    with tabs[1]:
+with tabs[1]:
 
-        log_file = "data/experiment_log.csv"
+    log_file = "data/experiment_log.csv"
 
-        if not os.path.exists(log_file):
-            st.warning("Run full evaluation first")
-        else:
-            df = pd.read_csv(log_file)
+    if not os.path.exists(log_file):
+        st.warning("Run full evaluation first")
+    else:
+        df = pd.read_csv(log_file)
 
-        # Mean Similarity Distribution by Question Type ------------------------
-            st.markdown("""
-            <div style="
-                background: rgba(255,255,255,0.78);
-                border-radius: 12px;
-                box-shadow: 0 6px 14px rgba(0,0,0,0.08);
-                padding: 0.5rem 1.2rem;
-                margin-top: 1.5rem;
-                margin-bottom: 1.2rem;
-                border-left: 6px solid #7b4bff;
-                font-family: 'Lato', 'Quicksand', sans-serif;
-            ">
-                <h3 style="font-size:1.4rem; font-weight:700; color:#222; margin:0;">
-                    Mean Similarity Distribution by Question Type
-                </h3>
-            </div>
-            """, unsafe_allow_html=True)
+        group_map = {
+            "DATE": "FACTUAL",
+            "LOCATION": "FACTUAL",
+            "PERSON": "FACTUAL",
+            "FACT": "FACTUAL",
+            "STATISTICS": "FACTUAL",
+            "ENTITY": "FACTUAL",
+            "REASON": "REASONING",
+            "PROCESS": "REASONING",
+            "OPINION": "OPINION"
+        }
+        df["type_group"] = df["type"].map(group_map)
 
-            fig1 = px.box(df, x="type", y="mean_similarity", color="type")
-            st.plotly_chart(fig1, use_container_width=True)
+        view_mode = st.radio(
+            "",
+            ["3 Groups", "9 Categories"],
+            index=0,
+            horizontal=True
+        )
 
-            # Retrieval Variance Distribution by Question Type ------------------------
-            st.markdown("""
-            <div style="
-                background: rgba(255,255,255,0.78);
-                border-radius: 12px;
-                box-shadow: 0 6px 14px rgba(0,0,0,0.08);
-                padding: 0.5rem 1.2rem;
-                margin-top: 1.5rem;
-                margin-bottom: 1.2rem;
-                border-left: 6px solid #7b4bff;
-                font-family: 'Lato', 'Quicksand', sans-serif;
-            ">
-                <h3 style="font-size:1.4rem; font-weight:700; color:#222; margin:0;">
-                    Retrieval Variance Distribution by Question Type
-                </h3>
-            </div>
-            """, unsafe_allow_html=True)
+        st.markdown(f"""
+<div style="
+    background: rgba(255,255,255,0.6);
+    border-radius: 12px;
+    padding: 1.2rem 1.4rem;
+    margin-top: 0.5rem;
+    margin-bottom: 1.5rem;
+    border-left: 4px solid #00006B;
+    font-size: 1.05rem;
+    color: #000;
+    line-height: 1.5;
+">
 
-            fig2 = px.box(df, x="type", y="variance_similarity", color="type")
-            st.plotly_chart(fig2, use_container_width=True)
+<span style="font-size:1.2rem; font-weight:700;">3 Groups</span><br>
+• FACTUAL (Date, Location, Person, Fact, Statistics, Entity)<br>
+• REASONING (Why, How, Process)<br>
+• OPINION (Subjective, Opinion based)
 
-            # Generation Length Distribution by Question Type ------------------------
-            st.markdown("""
-            <div style="
-                background: rgba(255,255,255,0.78);
-                border-radius: 12px;
-                box-shadow: 0 6px 14px rgba(0,0,0,0.08);
-                padding: 0.5rem 1.2rem;
-                margin-top: 1.5rem;
-                margin-bottom: 1.2rem;
-                border-left: 6px solid #7b4bff;
-                font-family: 'Lato', 'Quicksand', sans-serif;
-            ">
-                <h3 style="font-size:1.4rem; font-weight:700; color:#222; margin:0;">
-                    Generation Length Distribution by Question Type
-                </h3>
-            </div>
-            """, unsafe_allow_html=True)
+<span style="font-size:1.2rem; font-weight:700;">9 Categories</span><br>
+• DATE, LOCATION, PERSON, FACT, REASON, STATISTICS, ENTITY, PROCESS, OPINION
 
-            fig3 = px.box(df, x="type", y="generation_length", color="type")
-            st.plotly_chart(fig3, use_container_width=True)
+</div>
+""", unsafe_allow_html=True)
 
-            # Context Attention Distribution by Question Type ------------------------
-            st.markdown("""
-            <div style="
-                background: rgba(255,255,255,0.78);
-                border-radius: 12px;
-                box-shadow: 0 6px 14px rgba(0,0,0,0.08);
-                padding: 0.5rem 1.2rem;
-                margin-top: 1.5rem;
-                margin-bottom: 1.2rem;
-                border-left: 6px solid #7b4bff;
-                font-family: 'Lato', 'Quicksand', sans-serif;
-            ">
-                <h3 style="font-size:1.4rem; font-weight:700; color:#222; margin:0;">
-                    Context Attention Distribution by Question Type
-                </h3>
-            </div>
-            """, unsafe_allow_html=True)
+        x_col = "type_group" if view_mode == "3 Groups" else "type"
 
-            fig4 = px.box(df, x="type", y="context_attention", color="type")
-            st.plotly_chart(fig4, use_container_width=True)
+        st.markdown("""
+        <div style="background:rgba(255,255,255,0.78);border-radius:12px;
+        box-shadow:0 6px 14px rgba(0,0,0,0.08);padding:0.5rem 1.2rem;
+        margin-top:1.5rem;margin-bottom:1.2rem;border-left:6px solid #7b4bff;">
+        <h3 style="font-size:1.4rem;font-weight:700;color:#222;margin:0;">Mean Similarity Distribution</h3>
+        </div>
+        """, unsafe_allow_html=True)
+
+        fig1 = px.box(df, x=x_col, y="mean_similarity", color=x_col)
+        st.plotly_chart(fig1, use_container_width=True)
+
+        st.markdown("""
+        <div style="background:rgba(255,255,255,0.78);border-radius:12px;
+        box-shadow:0 6px 14px rgba(0,0,0,0.08);padding:0.5rem 1.2rem;
+        margin-top:1.5rem;margin-bottom:1.2rem;border-left:6px solid #7b4bff;">
+        <h3 style="font-size:1.4rem;font-weight:700;color:#222;margin:0;">Retrieval Variance Distribution</h3>
+        </div>
+        """, unsafe_allow_html=True)
+
+        fig2 = px.box(df, x=x_col, y="variance_similarity", color=x_col)
+        st.plotly_chart(fig2, use_container_width=True)
+
+        st.markdown("""
+        <div style="background:rgba(255,255,255,0.78);border-radius:12px;
+        box-shadow:0 6px 14px rgba(0,0,0,0.08);padding:0.5rem 1.2rem;
+        margin-top:1.5rem;margin-bottom:1.2rem;border-left:6px solid #7b4bff;">
+        <h3 style="font-size:1.4rem;font-weight:700;color:#222;margin:0;">Generation Length Distribution</h3>
+        </div>
+        """, unsafe_allow_html=True)
+
+        fig3 = px.box(df, x=x_col, y="generation_length", color=x_col)
+        st.plotly_chart(fig3, use_container_width=True)
+
+        st.markdown("""
+        <div style="background:rgba(255,255,255,0.78);border-radius:12px;
+        box-shadow:0 6px 14px rgba(0,0,0,0.08);padding:0.5rem 1.2rem;
+        margin-top:1.5rem;margin-bottom:1.2rem;border-left:6px solid #7b4bff;">
+        <h3 style="font-size:1.4rem;font-weight:700;color:#222;margin:0;">Context Attention Distribution</h3>
+        </div>
+        """, unsafe_allow_html=True)
+
+        fig4 = px.box(df, x=x_col, y="context_attention", color=x_col)
+        st.plotly_chart(fig4, use_container_width=True)
