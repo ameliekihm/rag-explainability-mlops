@@ -5,6 +5,10 @@ from src.generation.generator import Generator
 from src.explainability.explain import Explainability
 import streamlit as st
 import json
+import pandas as pd
+import time
+import plotly.express as px
+
 
 if sys.platform == "darwin":
     import multiprocessing
@@ -148,59 +152,104 @@ st.markdown(f"""
 st.markdown("<div class='title'>📑 RAG Explainability Dashboard </div>", unsafe_allow_html=True)
 st.markdown("<div class='subtitle'>Analyze how the model retrieves, generates, and explains answers with interpretability tools.</div>", unsafe_allow_html=True)
 
+# *** Add tabs to separate main dashboard and charts ***
+tabs = st.tabs(["RAG Dashboard", "Evaluation Insights"])
 
-query = st.text_input("Enter your question💡", "")
-st.markdown("<div class='run-btn'>", unsafe_allow_html=True)
-run_clicked = st.button("Run", key="run_btn")
-st.markdown("</div>", unsafe_allow_html=True)
-st.markdown("<div class='run-separator'></div>", unsafe_allow_html=True)
+with tabs[0]:
+
+    query = st.text_input("Enter your question💡", "")
+    st.markdown("<div class='run-btn'>", unsafe_allow_html=True)
+    run_clicked = st.button("Run", key="run_btn")
+    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("<div class='run-separator'></div>", unsafe_allow_html=True)
+
+    if run_clicked:
+        if not query.strip():
+            st.warning("Please enter a question first.")
+        else:
+            with st.spinner("Running retrieval and generation..."):
+                indices, distances = retriever.search(query)
+                top_contexts = [contexts[i] for i in indices]
+                combined_context = top_contexts[0]
+                answer, logits, attention = generator.generate_answer(query, combined_context, return_details=True)
+                result = explainer.explain(query, combined_context, answer, logits, attention)
+
+            st.markdown("<div class='content-card'><h3>Answer</h3>", unsafe_allow_html=True)
+            st.markdown(f"<div class='data-box'>{answer}</div>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+            highlighted_html = (
+                result["highlighted_context"]
+                .replace("**[", "<mark style='background-color:#fff59d;'>")
+                .replace("]**", "</mark>")
+                .replace("[", "<mark style='background-color:#fff59d;'>")
+                .replace("]", "</mark>")
+            )
+            st.markdown("<div class='content-card'><h3>Highlighted Context</h3>", unsafe_allow_html=True)
+            st.markdown(f"<div class='context-box'>{highlighted_html}</div>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+            st.markdown("<div class='content-card'><h3>Confidence Score</h3>", unsafe_allow_html=True)
+            st.markdown(f"<div class='score-box'>{result['confidence']:.3f}</div>", unsafe_allow_html=True)
+            st.markdown(
+                "<p style='font-size:14px; color:#666; font-style:italic;'>"
+                "This score represents the model’s certainty in its generated answer, "
+                "where values closer to 1.0 indicate higher confidence and reliability."
+                "</p>",
+                unsafe_allow_html=True
+            )
+            st.markdown("</div>", unsafe_allow_html=True)
+
+            st.markdown("<div class='content-card'><h3>Attention Map</h3>", unsafe_allow_html=True)
+            explainer.visualize_attention(attention, explainer.tokenizer.tokenize(query))
+            st.markdown(
+                "<p style='font-size:14px; color:#666; font-style:italic; margin-top:0.5rem;'>"
+                "This visualization illustrates how the model attends to different input tokens "
+                "while generating each output token. Darker regions indicate stronger attention "
+                "weights, highlighting the parts of the input most influential in forming the answer."
+                "</p>",
+                unsafe_allow_html=True
+            )
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    col1, col2 = st.columns([1, 3])
+
+    with col1:
+        st.markdown("**Run Full Evaluation on question_set.csv**")
+
+    with col2:
+        eval_clicked = st.button("Run Full Evaluation")
 
 
-if run_clicked:
-    if not query.strip():
-        st.warning("Please enter a question first.")
-    else:
-        with st.spinner("Running retrieval and generation..."):
-            indices, distances = retriever.search(query)
+    if eval_clicked:
+        st.write("Running full evaluation...")
+        df = pd.read_csv("data/question_set.csv")
+        logs = []
+        progress = st.progress(0)
+        total = len(df)
+
+        for idx, row in df.iterrows():
+            q = row["question"]
+            q_type = row["type"]
+            indices, distances = retriever.search(q)
             top_contexts = [contexts[i] for i in indices]
             combined_context = top_contexts[0]
-            answer, logits, attention = generator.generate_answer(query, combined_context, return_details=True)
-            result = explainer.explain(query, combined_context, answer, logits, attention)
+            answer, logits, attention = generator.generate_answer(q, combined_context, return_details=True)
+            result = explainer.explain(q, combined_context, answer, logits, attention)
 
-        st.markdown("<div class='content-card'><h3>Answer</h3>", unsafe_allow_html=True)
-        st.markdown(f"<div class='data-box'>{answer}</div>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+            logs.append({
+                "question": q,
+                "type": q_type,
+                "mean_similarity": float(sum(distances) / len(distances)),
+                "variance_similarity": float(pd.Series(distances).var()),
+                "generation_length": len(answer.split()),
+                "context_attention": float(result["confidence"]),
+                "answer": answer
+            })
 
-        highlighted_html = (
-            result["highlighted_context"]
-            .replace("**[", "<mark style='background-color:#fff59d;'>")
-            .replace("]**", "</mark>")
-            .replace("[", "<mark style='background-color:#fff59d;'>")
-            .replace("]", "</mark>")
-        )
-        st.markdown("<div class='content-card'><h3>Highlighted Context</h3>", unsafe_allow_html=True)
-        st.markdown(f"<div class='context-box'>{highlighted_html}</div>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+            progress.progress((idx + 1) / total)
+            time.sleep(0.1)
 
-        st.markdown("<div class='content-card'><h3>Confidence Score</h3>", unsafe_allow_html=True)
-        st.markdown(f"<div class='score-box'>{result['confidence']:.3f}</div>", unsafe_allow_html=True)
-        st.markdown(
-            "<p style='font-size:14px; color:#666; font-style:italic;'>"
-            "This score represents the model’s certainty in its generated answer, "
-            "where values closer to 1.0 indicate higher confidence and reliability."
-            "</p>",
-            unsafe_allow_html=True
-        )
-        st.markdown("</div>", unsafe_allow_html=True)
+        pd.DataFrame(logs).to_csv("data/experiment_log.csv", index=False)
+        st.success("Complete. Saved to data/experiment_log.csv")
 
-        st.markdown("<div class='content-card'><h3>Attention Map</h3>", unsafe_allow_html=True)
-        explainer.visualize_attention(attention, explainer.tokenizer.tokenize(query))
-        st.markdown(
-            "<p style='font-size:14px; color:#666; font-style:italic; margin-top:0.5rem;'>"
-            "This visualization illustrates how the model attends to different input tokens "
-            "while generating each output token. Darker regions indicate stronger attention "
-            "weights, highlighting the parts of the input most influential in forming the answer."
-            "</p>",
-            unsafe_allow_html=True
-        )
-        st.markdown("</div>", unsafe_allow_html=True)
