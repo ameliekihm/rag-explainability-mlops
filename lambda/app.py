@@ -1,59 +1,82 @@
-import sys
-import os
 import json
-import torch
+import boto3
 
-from transformers import T5ForConditionalGeneration, T5Tokenizer
+S3_BUCKET = "rag-pipeline-data-prod"
+CONTEXT_KEY = "contexts.json"
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+E5_ENDPOINT = "rag-e5-embed-endpoint"
+FLAN_ENDPOINT = "rag-flan-serverless-endpoint"
 
-from src.retrieval.retriever import Retriever
+s3 = boto3.client("s3")
+sm = boto3.client("sagemaker-runtime")
 
-retriever = Retriever(
-    model_name="intfloat/e5-large",
-    index_path="data/processed/hnsw_index.faiss",
-    k=1
-)
+# Load contexts once
+tmp_context = "/tmp/contexts.json"
+s3.download_file(S3_BUCKET, CONTEXT_KEY, tmp_context)
 
-with open("data/processed/contexts.json") as f:
+with open(tmp_context) as f:
     contexts = json.load(f)
 
-model_path = "lambda/model/t5-small"
-tokenizer = T5Tokenizer.from_pretrained(model_path)
-model = T5ForConditionalGeneration.from_pretrained(model_path)
-device = torch.device("cpu")
-model = model.to(device)
 
-def generate_answer(query, context):
-    prompt = f"question: {query} context: {context} answer:"
-    inputs = tokenizer(prompt, return_tensors="pt").to(device)
-    output = model.generate(inputs.input_ids, max_length=120)
-    answer = tokenizer.decode(output[0], skip_special_tokens=True)
-    return answer
+def embed(query):
+    payload = json.dumps({"inputs": query})
+    response = sm.invoke_endpoint(
+        EndpointName=E5_ENDPOINT,
+        ContentType="application/json",
+        Body=payload
+    )
+    return json.loads(response["Body"].read().decode())
+
+
+def get_best_context(query):
+    # TODO: Replace with vector search later
+    return contexts[0]
+
+
+def gen_answer(query, ctx):
+    prompt = f"question: {query} context: {ctx} answer:"
+    payload = json.dumps({"inputs": prompt})
+    response = sm.invoke_endpoint(
+        EndpointName=FLAN_ENDPOINT,
+        ContentType="application/json",
+        Body=payload
+    )
+    return response["Body"].read().decode()
+
 
 def handler(event, context):
-    query = event.get("query", "")
+    try:
+        body = json.loads(event.get("body", "{}"))
+    except:
+        body = {}
+
+    query = body.get("query")
 
     if not query:
         return {
             "statusCode": 400,
-            "body": json.dumps({"error": "query is required"})
+            "headers": {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "*",
+                "Access-Control-Allow-Headers": "*"
+            },
+            "body": json.dumps({"error": "No query"})
         }
 
-    indices, distances = retriever.search(query)
-    top_index = int(indices[0])
-    top_context = contexts[top_index]
-
-    answer = generate_answer(query, top_context)
-
-    response = {
-        "query": query,
-        "retrieved_index": top_index,
-        "context": top_context,
-        "answer": answer
-    }
+    # ---- RAG pipeline ----
+    ctx = get_best_context(query)
+    answer = gen_answer(query, ctx)
 
     return {
         "statusCode": 200,
-        "body": json.dumps(response)
+        "headers": {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*"
+        },
+        "body": json.dumps({
+            "query": query,
+            "context_preview": ctx[:200],
+            "answer": answer
+        })
     }
