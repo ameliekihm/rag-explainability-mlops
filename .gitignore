@@ -20,3 +20,9 @@ data/
 src/embeddings/vectorize_sample.py
 
 lambda/model/
+input.json
+output.json
+models/
+setup.sh
+cleanup.sh
+lambda_deploy.zip
