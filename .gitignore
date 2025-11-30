@@ -23,6 +23,7 @@ lambda/model/
 input.json
 output.json
 models/
-setup.sh
-cleanup.sh
-lambda_deploy.zip
+setup_sagemaker.sh
+cleanup_sagemaker.sh
+setup_fargate.sh
+cleanup_fargate.sh
