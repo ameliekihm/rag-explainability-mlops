@@ -1,0 +1,108 @@
+name: Deploy to ECS Fargate
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+  ECR_REPO_NAME: rag-mlops-dashboard
+  ECS_CLUSTER: rag-mlops-cluster
+  ECS_SERVICE: rag-mlops-fargate
+  TASK_FAMILY: rag-mlops-task
+  IMAGE_TAG: latest
+  DOCKERFILE_PATH: mlops_dashboard/Dockerfile
+  CONTEXT_PATH: mlops_dashboard
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build Docker image
+        run: |
+          docker build --platform linux/amd64 \
+            -t $ECR_REPO_NAME:$IMAGE_TAG \
+            -f $DOCKERFILE_PATH \
+            $CONTEXT_PATH
+
+      - name: Tag image
+        run: |
+          docker tag $ECR_REPO_NAME:$IMAGE_TAG \
+            $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_NAME:$IMAGE_TAG
+
+      - name: Push to ECR
+        run: |
+          docker push \
+            $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_NAME:$IMAGE_TAG
+
+      - name: Fetch image digest
+        id: digest
+        run: |
+          DIGEST=$(aws ecr describe-images \
+            --repository-name $ECR_REPO_NAME \
+            --query "imageDetails[?imageTags!=null && contains(imageTags, 'latest')].imageDigest" \
+            --output text)
+          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+
+      - name: Register new ECS task definition revision
+        id: register
+        run: |
+          NEW_TASK_DEF=$(cat <<EOF
+          {
+            "family": "$TASK_FAMILY",
+            "networkMode": "awsvpc",
+            "requiresCompatibilities": ["FARGATE"],
+            "cpu": "1024",
+            "memory": "2048",
+            "executionRoleArn": "arn:aws:iam::$AWS_ACCOUNT_ID:role/ecsTaskExecutionRole",
+            "containerDefinitions": [
+              {
+                "name": "rag-mlops-container",
+                "image": "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_NAME:${IMAGE_TAG}@${{ steps.digest.outputs.digest }}",
+                "essential": true,
+                "portMappings": [
+                  { "containerPort": 8080, "protocol": "tcp" }
+                ]
+              }
+            ]
+          }
+          EOF
+          )
+          echo "$NEW_TASK_DEF" > taskdef.json
+
+          TASK_DEF_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://taskdef.json \
+            --query "taskDefinition.taskDefinitionArn" \
+            --output text)
+
+          echo "taskdef=$TASK_DEF_ARN" >> $GITHUB_OUTPUT
+
+      - name: Update ECS service with new task definition
+        run: |
+          aws ecs update-service \
+            --cluster $ECS_CLUSTER \
+            --service $ECS_SERVICE \
+            --task-definition ${{ steps.register.outputs.taskdef }} \
+            --force-new-deployment
+
+      - name: Wait for ECS service to stabilize
+        run: |
+          aws ecs wait services-stable \
+            --cluster $ECS_CLUSTER \
+            --services $ECS_SERVICE
