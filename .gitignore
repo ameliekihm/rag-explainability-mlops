@@ -27,3 +27,6 @@ setup_sagemaker.sh
 cleanup_sagemaker.sh
 setup_fargate.sh
 cleanup_fargate.sh
+tests/test_delete_flan_realtime.sh
+tests/test_realtime_latency.py
+tests/test_setup_flan_realtime.sh
